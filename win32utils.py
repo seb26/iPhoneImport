@@ -1,7 +1,10 @@
 from dataclasses import dataclass
 
 import pythoncom
+import os
+from datetime import datetime
 from win32comext.shell import shell, shellcon
+import win32com.client
 
 
 @dataclass
@@ -43,23 +46,48 @@ def get_shell_item_from_path(path):
     except BaseException as exception:
         raise Exception(f"Cannot get shell item for {path}") from exception
 
-
 # returns a dictionary of (file name -> shell item) of files in shell folder
-def walk_dcim(shell_folder):
-    result = {}
+def walk_dcim(shell_folder, filters=[], root_folder=False):
 
+    def _test_filters(filters, input):
+        return all( f(input) for f in filters if f )
+    
+    result = {}
+    
     for folder_pidl in shell_folder.EnumObjects(0, shellcon.SHCONTF_FOLDERS):
         child_shell_folder = shell_folder.BindToObject(folder_pidl, None, shell.IID_IShellFolder)
-        name = shell_folder.GetDisplayNameOf(folder_pidl, shellcon.SHGDN_FORADDRESSBAR)
-        print(f"Listing folder '{name}'")
-        result |= walk_dcim(child_shell_folder)
+        folder_path = shell_folder.GetDisplayNameOf(folder_pidl, shellcon.SHGDN_FORADDRESSBAR)
+        if root_folder:
+            # Only examine date for the root folder.
+            # On subfolders after that, don't examine. All files at any level will get examined
+            if len(filters) > 0:
+                try:
+                    folder_name = os.path.basename(folder_path)
+                    this_folder_date = datetime.strptime(folder_name[:6], "%Y%m")
+                except ValueError:
+                    print(f"Warn: Did not recognise date from this folder '{folder_name}' at {folder_path}")
+                if _test_filters(filters, this_folder_date):
+                    print(f"Listing folder '{folder_path}'")
+                    result |= walk_dcim(child_shell_folder, filters=filters)
+                else:
+                    print(f"Skipped by filter: '{folder_path}'")
+            else:
+                print(f"Listing folder '{folder_path}'")
+                result |= walk_dcim(child_shell_folder, filters=filters)
+        else:
+            print(f"Listing folder '{folder_path}'")
+            result |= walk_dcim(child_shell_folder, filters=filters)
 
+    file_count = 0
     for file_pidl in shell_folder.EnumObjects(0, shellcon.SHCONTF_NONFOLDERS):
+        ## Filters currently not implemented!
+        ## Need to research pywin32 and getting date created from shell
         sourcefolder_pidl = shell.SHGetIDListFromObject(shell_folder)
         sourcefile_shell_item = shell.SHCreateShellItem(sourcefolder_pidl, None, file_pidl)
         sourcefile_name = get_absolute_name(sourcefile_shell_item)
         result[sourcefile_name] = sourcefile_shell_item
-
+        file_count += 1
+    print(f"    Found {file_count} file(s)")
     return result
 
 

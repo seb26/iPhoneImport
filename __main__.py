@@ -86,9 +86,27 @@ def write_imported_file_list_to_metadata_folder(metadata_folder, file_path_set):
         for filename in sorted(list(file_path_set)):
             file.write(f"{filename}\n")
 
+def create_date_filter(input, before=True):
+    try:
+        input_date = datetime.strptime(input, "%Y%m%d")
+    except ValueError:
+        print(f"Invalid date string given: {input} - Skipped using it to filter")
+        return False
+    if before is True:
+        return lambda this_date: input_date <= this_date
+    elif before is False:
+        return lambda this_date: input_date >= this_date 
+    else:
+        return False
 
 def main(args):
     print(f"Program args: {args.__dict__}")
+
+    date_filters = []
+    if args.exclude_before:
+        date_filters.append( create_date_filter(args.exclude_before, before=True) )
+    if args.exclude_after:
+        date_filters.append( create_date_filter(args.exclude_after, before=False) )
 
     source_folder_absolute_display_name = args.source
     destination_path_str = args.destination
@@ -98,7 +116,11 @@ def main(args):
     source_folder_shell_folder = win32utils.get_shell_folder_from_absolute_display_name(
         source_folder_absolute_display_name)
 
-    source_shell_items_by_path = win32utils.walk_dcim(source_folder_shell_folder)
+    source_shell_items_by_path = win32utils.walk_dcim(
+        source_folder_shell_folder,
+        filters=date_filters,
+        root_folder=True,
+    )
 
     imported_file_set, not_imported_file_set, shell_items_to_copy_by_target_path = resolve_items_to_import(
         source_folder_absolute_display_name, source_shell_items_by_path, already_imported_files_set)
@@ -122,4 +144,6 @@ if __name__ == "__main__":
     parser.add_argument('destination')
     parser.add_argument('--metadata-folder', required=False)
     parser.add_argument('--skip-copy', required=False, action='store_true')
+    parser.add_argument('--exclude-before', help="exclude files before this date (YYYYMMDD)")
+    parser.add_argument('--exclude-after', help="exclude files after this date (YYYYMMDD)")
     main(parser.parse_args())
