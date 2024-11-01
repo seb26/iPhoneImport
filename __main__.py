@@ -63,6 +63,7 @@ def remove_prefix(str, prefix):
 def copy_using_windows_shell(shell_items_to_copy_by_target_path, destination_base_path_str):
     target_folder_shell_item_by_path = {}
     copy_params_list = []
+    count_files_to_copy = 0
     for destination_file_path in sorted(shell_items_to_copy_by_target_path.keys()):
         desination_full_path = os.path.join(destination_base_path_str, destination_file_path)
         desination_folder = os.path.dirname(desination_full_path)
@@ -75,6 +76,8 @@ def copy_using_windows_shell(shell_items_to_copy_by_target_path, destination_bas
         copy_params = CopyParams(source_file_shell_item, target_folder_shell_item_by_path[desination_folder],
                                  desination_filename)
         copy_params_list.append(copy_params)
+        count_files_to_copy += 1
+    print(f'Files to copy: {count_files_to_copy}')
     win32utils.copy_multiple_files(copy_params_list)
 
 
